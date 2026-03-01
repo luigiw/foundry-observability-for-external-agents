@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+.dockerignore
+README.md
+test_local.py
+client.py
+.env
+*.md
