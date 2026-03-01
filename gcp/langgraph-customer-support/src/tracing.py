@@ -134,6 +134,8 @@ def invoke_agent_span(
     attributes: dict[str, Any] = {
         "gen_ai.operation.name": "invoke_agent",
         "gen_ai.provider.name": PROVIDER_NAME,
+        # az.namespace sets the "Type" field in App Insights dependencies table
+        "az.namespace": "GenAI",
     }
 
     # Conditionally Required
