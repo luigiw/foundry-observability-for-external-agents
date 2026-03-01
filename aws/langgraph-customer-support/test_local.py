@@ -3,6 +3,7 @@ import os
 
 # Set the Application Insights connection string
 os.environ["APPLICATIONINSIGHTS_CONNECTION_STRING"] = "InstrumentationKey=320c6a3f-989f-4303-8bbe-f7682ddec3bc;IngestionEndpoint=https://eastus2-3.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus2.livediagnostics.monitor.azure.com/;ApplicationId=e93e55ce-5468-4d9c-a532-8887871161ed"
+os.environ.setdefault("OTEL_SERVICE_NAME", "aws-langgraph-customer-support")
 
 # Enable content recording for Gen AI traces
 os.environ["AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED"] = "true"

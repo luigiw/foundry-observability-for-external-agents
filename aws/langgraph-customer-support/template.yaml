@@ -19,6 +19,7 @@ Globals:
       Variables:
         AWS_LWA_INVOKE_MODE: RESPONSE_STREAM
         APPLICATIONINSIGHTS_CONNECTION_STRING: !Ref ApplicationInsightsConnectionString
+        OTEL_SERVICE_NAME: aws-langgraph-customer-support
 
 Resources:
   # Lambda Execution Role with Bedrock access
