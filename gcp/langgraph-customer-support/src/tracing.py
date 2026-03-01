@@ -12,7 +12,9 @@ _monitor_configured = False
 
 # OTel Gen AI semantic convention constants
 PROVIDER_NAME = "anthropic"
-SERVICE_NAME = "customer-support-agents"
+# Read from OTEL_SERVICE_NAME so this agent is distinguishable in shared App Insights
+# (sets cloud_RoleName in Application Insights)
+SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME", "gcp-langgraph-customer-support")
 
 
 def get_connection_string() -> str | None:
@@ -41,8 +43,31 @@ def _configure_azure_monitor():
             return
 
         from azure.monitor.opentelemetry import configure_azure_monitor
-        configure_azure_monitor(connection_string=connection_string)
-        logger.info("Azure Monitor configured successfully")
+        configure_azure_monitor(
+            connection_string=connection_string,
+            resource_attributes={"service.name": SERVICE_NAME},
+        )
+
+        # AzureAIOpenTelemetryTracer sets gen_ai.provider.name but the Azure Monitor
+        # exporter looks for gen_ai.system (standard OTel semconv) to set the
+        # dependency Type column. This processor bridges the gap so all Gen AI spans
+        # show "GenAI | anthropic" instead of "N/A".
+        from opentelemetry import trace as _trace
+        from opentelemetry.sdk.trace import SpanProcessor
+
+        class _ProviderNameToSystemProcessor(SpanProcessor):
+            def on_start(self, span, parent_context=None):
+                attrs = span.attributes or {}
+                if "gen_ai.provider.name" in attrs and "gen_ai.system" not in attrs:
+                    span.set_attribute("gen_ai.system", attrs["gen_ai.provider.name"])
+            def on_end(self, span):
+                pass
+
+        provider = _trace.get_tracer_provider()
+        if hasattr(provider, "add_span_processor"):
+            provider.add_span_processor(_ProviderNameToSystemProcessor())
+
+        logger.info(f"Azure Monitor configured successfully (service.name={SERVICE_NAME!r})")
         _monitor_configured = True
     except Exception as e:
         logger.warning(f"Failed to configure Azure Monitor: {e}")
@@ -129,6 +154,9 @@ def invoke_agent_span(
     attributes: dict[str, Any] = {
         "gen_ai.operation.name": "invoke_agent",
         "gen_ai.provider.name": PROVIDER_NAME,
+        # gen_ai.system is the standard OTel semconv attribute that Azure Monitor
+        # exporter reads to set the dependency Type (e.g. "GenAI | anthropic")
+        "gen_ai.system": PROVIDER_NAME,
     }
 
     # Conditionally Required

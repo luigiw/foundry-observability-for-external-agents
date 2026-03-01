@@ -147,7 +147,15 @@ Classification guide:
     if tracer:
         invoke_config["callbacks"] = [tracer]
 
-    response = llm.invoke(messages, config=invoke_config)
+    with invoke_agent_span(
+        agent_name,
+        agent_description="Routes customer queries to appropriate specialist agents",
+        conversation_id=get_session_id(),
+        request_model=model_id,
+        temperature=0.2,
+    ) as span_result:
+        response = llm.invoke(messages, config=invoke_config)
+        span_result.update(_extract_token_usage(response))
 
     try:
         result = json.loads(response.content)
@@ -197,7 +205,15 @@ Always maintain a professional and friendly tone."""
     if tracer:
         invoke_config["callbacks"] = [tracer]
 
-    response = llm.invoke(messages, config=invoke_config)
+    with invoke_agent_span(
+        agent_name,
+        agent_description="Handles billing, payments, refunds, and subscription queries",
+        conversation_id=get_session_id(),
+        request_model=model_id,
+        temperature=0.3,
+    ) as span_result:
+        response = llm.invoke(messages, config=invoke_config)
+        span_result.update(_extract_token_usage(response))
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -242,7 +258,15 @@ Be patient and thorough in your explanations."""
     if tracer:
         invoke_config["callbacks"] = [tracer]
 
-    response = llm.invoke(messages, config=invoke_config)
+    with invoke_agent_span(
+        agent_name,
+        agent_description="Handles technical issues, troubleshooting, and product support",
+        conversation_id=get_session_id(),
+        request_model=model_id,
+        temperature=0.3,
+    ) as span_result:
+        response = llm.invoke(messages, config=invoke_config)
+        span_result.update(_extract_token_usage(response))
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -285,7 +309,15 @@ Be warm, helpful, and informative. Guide customers to the right department if ne
     if tracer:
         invoke_config["callbacks"] = [tracer]
 
-    response = llm.invoke(messages, config=invoke_config)
+    with invoke_agent_span(
+        agent_name,
+        agent_description="Handles general inquiries, FAQs, and company information",
+        conversation_id=get_session_id(),
+        request_model=model_id,
+        temperature=0.4,
+    ) as span_result:
+        response = llm.invoke(messages, config=invoke_config)
+        span_result.update(_extract_token_usage(response))
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -325,7 +357,15 @@ Be calm, professional, and reassuring."""
     if tracer:
         invoke_config["callbacks"] = [tracer]
 
-    response = llm.invoke(messages, config=invoke_config)
+    with invoke_agent_span(
+        agent_name,
+        agent_description="Handles escalation cases requiring human intervention",
+        conversation_id=get_session_id(),
+        request_model=model_id,
+        temperature=0.2,
+    ) as span_result:
+        response = llm.invoke(messages, config=invoke_config)
+        span_result.update(_extract_token_usage(response))
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
