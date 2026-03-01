@@ -12,7 +12,9 @@ _monitor_configured = False
 
 # OTel Gen AI semantic convention constants
 PROVIDER_NAME = "anthropic"
-SERVICE_NAME = "customer-support-agents"
+# Read from OTEL_SERVICE_NAME so this agent is distinguishable in shared App Insights
+# (sets cloud_RoleName in Application Insights)
+SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME", "gcp-langgraph-customer-support")
 
 
 def get_connection_string() -> str | None:
@@ -41,8 +43,11 @@ def _configure_azure_monitor():
             return
 
         from azure.monitor.opentelemetry import configure_azure_monitor
-        configure_azure_monitor(connection_string=connection_string)
-        logger.info("Azure Monitor configured successfully")
+        configure_azure_monitor(
+            connection_string=connection_string,
+            resource_attributes={"service.name": SERVICE_NAME},
+        )
+        logger.info(f"Azure Monitor configured successfully (service.name={SERVICE_NAME!r})")
         _monitor_configured = True
     except Exception as e:
         logger.warning(f"Failed to configure Azure Monitor: {e}")

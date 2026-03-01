@@ -4,7 +4,7 @@ from uuid import uuid4
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.runnables import RunnableConfig
-from .tracing import get_tracer_callbacks, get_azure_tracer
+from .tracing import get_tracer_callbacks, get_azure_tracer, SERVICE_NAME
 from .agents import (
     router_agent,
     billing_specialist,
@@ -108,7 +108,7 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
         "gen_ai.agent.description": "Multi-agent customer support system with routing and specialist agents",
         "gen_ai.conversation.id": session_id,
         "otel_agent_span": True,
-        "service.name": "customer-support-agents",
+        "service.name": SERVICE_NAME,
     }
 
     config: RunnableConfig = {
