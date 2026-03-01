@@ -1,4 +1,4 @@
-"""Azure Application Insights tracing using langchain-azure-ai with Gen AI semantic conventions."""
+"""Azure Application Insights tracing using OpenTelemetry Gen AI semantic conventions."""
 import os
 import logging
 from contextlib import contextmanager
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 # Default connection string - can be overridden via environment variable
 DEFAULT_CONNECTION_STRING = "InstrumentationKey=320c6a3f-989f-4303-8bbe-f7682ddec3bc;IngestionEndpoint=https://eastus2-3.in.applicationinsights.azure.com/;LiveEndpoint=https://eastus2.livediagnostics.monitor.azure.com/;ApplicationId=e93e55ce-5468-4d9c-a532-8887871161ed"
 
-_azure_tracer = None
+_otel_configured = False
 _otel_tracer = None
 
 
@@ -17,40 +17,50 @@ def get_connection_string() -> str:
     return os.environ.get("APPLICATIONINSIGHTS_CONNECTION_STRING", DEFAULT_CONNECTION_STRING)
 
 
-def get_azure_tracer():
-    """
-    Get the Azure AI OpenTelemetry tracer for LangChain/LangGraph.
+def _ensure_otel_configured():
+    """Ensure OpenTelemetry is configured with Azure Monitor exporter."""
+    global _otel_configured
+    if _otel_configured:
+        return
     
-    This tracer implements the OpenTelemetry Gen AI semantic conventions
-    and automatically traces LLM calls, tool invocations, and agent steps.
+    from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.resources import Resource
     
-    Returns:
-        AzureAIOpenTelemetryTracer instance to use as a callback
-    """
-    global _azure_tracer
+    # Check if a TracerProvider is already set
+    current_provider = trace.get_tracer_provider()
+    if isinstance(current_provider, TracerProvider):
+        # Already configured, just mark as done
+        _otel_configured = True
+        return
     
-    if _azure_tracer is not None:
-        return _azure_tracer
+    # Create a new TracerProvider with service name
+    resource = Resource.create({
+        "service.name": os.getenv("OTEL_SERVICE_NAME", "customer-support-agents"),
+        "service.version": "1.0.0",
+    })
+    provider = TracerProvider(resource=resource)
     
-    from langchain_azure_ai.callbacks.tracers import AzureAIOpenTelemetryTracer
-    
+    # Add Azure Monitor exporter
     connection_string = get_connection_string()
-    enable_content = os.environ.get("AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED", "true").lower() == "true"
+    exporter = AzureMonitorTraceExporter(connection_string=connection_string)
+    provider.add_span_processor(BatchSpanProcessor(exporter))
     
-    # Create tracer with connection string - this was working at 8:46
-    _azure_tracer = AzureAIOpenTelemetryTracer(
-        connection_string=connection_string,
-        enable_content_recording=enable_content,
-    )
+    # Set as global provider
+    trace.set_tracer_provider(provider)
     
-    logger.info(f"Azure AI OpenTelemetry tracer initialized (content recording: {enable_content})")
-    
-    return _azure_tracer
+    _otel_configured = True
+    logger.info("OpenTelemetry configured with Azure Monitor exporter")
 
 
 def get_otel_tracer():
     """Get OpenTelemetry tracer for creating custom spans."""
     global _otel_tracer
+    
+    _ensure_otel_configured()
+    
     if _otel_tracer is None:
         from opentelemetry import trace
         _otel_tracer = trace.get_tracer("customer-support-agents", "1.0.0")
@@ -83,7 +93,10 @@ def agent_span(agent_name: str, agent_description: str = None, session_id: str =
     with tracer.start_as_current_span(span_name, kind=SpanKind.INTERNAL) as span:
         # Required attributes per OTel Gen AI semantic conventions
         span.set_attribute("gen_ai.operation.name", "invoke_agent")
-        span.set_attribute("gen_ai.provider.name", "aws.bedrock")  # Use standard value
+        span.set_attribute("gen_ai.provider.name", "aws.bedrock")
+        # gen_ai.system is the standard OTel semconv attribute that Azure Monitor
+        # exporter reads to set the dependency Type ("GenAI | aws.bedrock")
+        span.set_attribute("gen_ai.system", "aws.bedrock")
         
         # Agent identification attributes
         span.set_attribute("gen_ai.agent.name", agent_name)
@@ -100,12 +113,6 @@ def agent_span(agent_name: str, agent_description: str = None, session_id: str =
             span.set_status(trace.Status(trace.StatusCode.ERROR, str(e)))
             span.record_exception(e)
             raise
-
-
-def get_tracer_callbacks() -> list:
-    """Get the list of tracer callbacks to pass to LangChain/LangGraph."""
-    tracer = get_azure_tracer()
-    return [tracer] if tracer else []
 
 
 def flush_traces():

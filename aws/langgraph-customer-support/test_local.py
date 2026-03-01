@@ -9,8 +9,8 @@ os.environ.setdefault("OTEL_SERVICE_NAME", "aws-langgraph-customer-support")
 os.environ["AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED"] = "true"
 
 # Initialize tracer before importing graph
-from src.tracing import get_azure_tracer
-get_azure_tracer()
+from src.tracing import get_otel_tracer, flush_traces
+get_otel_tracer()
 
 from src.graph import invoke_support
 
@@ -59,7 +59,8 @@ if __name__ == "__main__":
     
     test_general()
     test_billing()
-    
+
     print("\n" + "=" * 50)
-    print("Tests complete! Check Azure Application Insights for Gen AI traces.")
-    print("Look for traces with gen_ai.* attributes in the dependencies table.")
+    print("Tests complete! Flushing traces to Azure Application Insights...")
+    flush_traces()
+    print("Done. Check Application Insights for traces (cloud_RoleName=aws-langgraph-customer-support).")
