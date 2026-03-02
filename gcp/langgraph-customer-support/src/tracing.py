@@ -213,9 +213,9 @@ def invoke_agent_span(
         for k, v in attributes.items():
             span.set_attribute(k, v)
         if input_text:
-            span.add_event(
-                "gen_ai.user.message",
-                {"gen_ai.event.content": json.dumps({"role": "user", "content": input_text})},
+            span.set_attribute(
+                "gen_ai.input.messages",
+                json.dumps([{"role": "user", "parts": [{"type": "text", "content": input_text}]}]),
             )
         try:
             yield result
@@ -229,9 +229,9 @@ def invoke_agent_span(
             if result.get("finish_reasons"):
                 span.set_attribute("gen_ai.response.finish_reasons", result["finish_reasons"])
             if result.get("output_text"):
-                span.add_event(
-                    "gen_ai.assistant.message",
-                    {"gen_ai.event.content": json.dumps({"role": "assistant", "content": result["output_text"]})},
+                span.set_attribute(
+                    "gen_ai.output.messages",
+                    json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": result["output_text"]}], "finish_reason": "stop"}]),
                 )
             span.set_status(StatusCode.OK)
         except Exception as e:

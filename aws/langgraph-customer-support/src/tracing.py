@@ -130,9 +130,9 @@ def agent_span(
         for k, v in attributes.items():
             span.set_attribute(k, v)
         if input_text:
-            span.add_event(
-                "gen_ai.user.message",
-                {"gen_ai.event.content": json.dumps({"role": "user", "content": input_text})},
+            span.set_attribute(
+                "gen_ai.input.messages",
+                json.dumps([{"role": "user", "parts": [{"type": "text", "content": input_text}]}]),
             )
         try:
             yield span

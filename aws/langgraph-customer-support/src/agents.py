@@ -58,7 +58,7 @@ Classification guide:
     invoke_config = {"callbacks": [tracer]} if tracer else {}
     with agent_span(agent_name, "Routes customer queries to appropriate specialist agents", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
-        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
+        span.set_attribute("gen_ai.output.messages", json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": response.content}], "finish_reason": "stop"}]))
 
     try:
         result = json.loads(response.content)
@@ -98,7 +98,7 @@ Always maintain a professional and friendly tone."""
     invoke_config = {"callbacks": [tracer]} if tracer else {}
     with agent_span(agent_name, "Handles billing, payments, refunds, and subscription queries", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
-        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
+        span.set_attribute("gen_ai.output.messages", json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": response.content}], "finish_reason": "stop"}]))
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -133,7 +133,7 @@ Be patient and thorough in your explanations."""
     invoke_config = {"callbacks": [tracer]} if tracer else {}
     with agent_span(agent_name, "Handles technical issues, troubleshooting, and product support", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
-        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
+        span.set_attribute("gen_ai.output.messages", json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": response.content}], "finish_reason": "stop"}]))
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -166,7 +166,7 @@ Be warm, helpful, and informative. Guide customers to the right department if ne
     invoke_config = {"callbacks": [tracer]} if tracer else {}
     with agent_span(agent_name, "Handles general inquiries, FAQs, and company information", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
-        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
+        span.set_attribute("gen_ai.output.messages", json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": response.content}], "finish_reason": "stop"}]))
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -196,7 +196,7 @@ Be calm, professional, and reassuring."""
     invoke_config = {"callbacks": [tracer]} if tracer else {}
     with agent_span(agent_name, "Handles escalation cases requiring human intervention", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
-        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
+        span.set_attribute("gen_ai.output.messages", json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": response.content}], "finish_reason": "stop"}]))
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name

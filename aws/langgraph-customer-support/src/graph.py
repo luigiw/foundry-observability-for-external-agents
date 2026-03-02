@@ -120,7 +120,7 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
     with agent_span("Customer Support Graph", "Multi-agent customer support workflow", session_id, input_text=message) as span:
         result = customer_support_graph.invoke(initial_state, config=config)
         if result.get("final_response"):
-            span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": json.dumps({"role": "assistant", "content": result["final_response"]})})
+            span.set_attribute("gen_ai.output.messages", json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": result["final_response"]}], "finish_reason": "stop"}]))
 
     return {
         "response": result["final_response"],
