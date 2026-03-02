@@ -4,7 +4,6 @@ from uuid import uuid4
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.runnables import RunnableConfig
-from .tracing import agent_span
 from .agents import (
     router_agent,
     billing_specialist,
@@ -84,9 +83,9 @@ customer_support_graph = build_graph()
 
 
 def invoke_support(message: str, customer_id: str | None = None) -> dict:
-    """Invoke the customer support graph with a message, with Azure AI tracing."""
+    """Invoke the customer support graph with Azure AI tracing."""
     from langchain_core.messages import HumanMessage
-    from .tracing import agent_span
+    from .tracing import get_azure_tracer as get_tracer
     
     # Generate a unique session ID for this conversation
     session_id = str(uuid4())
@@ -102,26 +101,26 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
         "final_response": None,
     }
     
-    # Wrap the entire workflow in an OTel span with proper Gen AI conventions
-    # We use our own agent_span instead of LangChain tracer to avoid duplicates
-    with agent_span(
-        "Customer Support Workflow",
-        "Multi-agent customer support system with routing and specialist agents",
-        session_id
-    ):
-        # Don't pass tracer callback - we're using OTel spans directly
-        config: RunnableConfig = {
-            "run_name": "Customer Support Workflow",
-            "tags": ["customer-support", "multi-agent", "langgraph"],
-            "metadata": {
-                "workflow_type": "customer_support",
-                "customer_id": customer_id,
-                "session_id": session_id,
-            },
-            "configurable": {"thread_id": session_id},
-        }
-        
-        result = customer_support_graph.invoke(initial_state, config=config)
+    # Get the Azure AI tracer instance
+    tracer = get_tracer()
+    
+    # Configure with tracer callback
+    config: RunnableConfig = {
+        "run_name": "Customer Support Workflow",
+        "tags": ["customer-support", "multi-agent", "langgraph"],
+        "metadata": {
+            "workflow_type": "customer_support",
+            "customer_id": customer_id,
+            "session_id": session_id,
+            "agent_name": "Customer Support Workflow",
+            "agent_type": "multi_agent_workflow",
+            "otel_agent_span": True,
+        },
+        "configurable": {"thread_id": session_id},
+        "callbacks": [tracer],
+    }
+    
+    result = customer_support_graph.invoke(initial_state, config=config)
     
     return {
         "response": result["final_response"],
