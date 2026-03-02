@@ -103,6 +103,7 @@ def query_summary(agent: str, minutes: int) -> None:
     kql = f"""
 dependencies
 {role_filter(agent)}
+| summarize arg_min(timestamp, *) by id   // deduplicate App Insights ingestion retries
 | summarize
     spans      = count(),
     genai_spans = countif(type startswith "GenAI"),
@@ -123,6 +124,7 @@ def query_recent_spans(agent: str, minutes: int) -> None:
 dependencies
 {role_filter(agent)}
 | where type startswith "GenAI"
+| summarize arg_min(timestamp, *) by id   // deduplicate App Insights ingestion retries
 | extend
     agent   = tostring(customDimensions["gen_ai.agent.name"]),
     model   = tostring(customDimensions["gen_ai.request.model"]),
@@ -144,6 +146,7 @@ def query_agent_nodes(agent: str, minutes: int) -> None:
 dependencies
 {role_filter(agent)}
 | where type startswith "GenAI"
+| summarize arg_min(timestamp, *) by id   // deduplicate App Insights ingestion retries
 | extend
     agent_node = tostring(customDimensions["gen_ai.agent.name"]),
     in_tok     = toint(customDimensions["gen_ai.usage.input_tokens"]),
@@ -170,6 +173,7 @@ def query_compare(minutes: int) -> None:
 dependencies
 | where cloud_RoleName in ("{aws_name}", "{gcp_name}")
 | where type startswith "GenAI"
+| summarize arg_min(timestamp, *) by id   // deduplicate App Insights ingestion retries
 | extend
     in_tok  = toint(customDimensions["gen_ai.usage.input_tokens"]),
     out_tok = toint(customDimensions["gen_ai.usage.output_tokens"])
@@ -194,6 +198,7 @@ def query_errors(agent: str, minutes: int) -> None:
 dependencies
 {role_filter(agent)}
 | where success == false
+| summarize arg_min(timestamp, *) by id   // deduplicate App Insights ingestion retries
 | extend agent_node = tostring(customDimensions["gen_ai.agent.name"])
 | project timestamp, cloud_RoleName, name, agent_node, resultCode, duration
 | order by timestamp desc

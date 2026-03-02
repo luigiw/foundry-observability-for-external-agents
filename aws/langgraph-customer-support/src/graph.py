@@ -101,10 +101,9 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
         "final_response": None,
     }
     
-    # Get the Azure AI tracer instance
-    tracer = get_tracer()
-    
-    # Configure with tracer callback
+    # Ensure tracing is initialised (agents.py adds callbacks per llm.invoke call)
+    get_tracer()
+
     config: RunnableConfig = {
         "run_name": "Customer Support Workflow",
         "tags": ["customer-support", "multi-agent", "langgraph"],
@@ -112,12 +111,8 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
             "workflow_type": "customer_support",
             "customer_id": customer_id,
             "session_id": session_id,
-            "agent_name": "Customer Support Workflow",
-            "agent_type": "multi_agent_workflow",
-            "otel_agent_span": True,
         },
         "configurable": {"thread_id": session_id},
-        "callbacks": [tracer],
     }
     
     result = customer_support_graph.invoke(initial_state, config=config)

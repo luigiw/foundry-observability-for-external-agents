@@ -34,23 +34,31 @@ def _configure_azure_monitor():
             resource_attributes={"service.name": SERVICE_NAME},
         )
 
-        # AzureAIOpenTelemetryTracer sets gen_ai.provider.name but the Azure Monitor
-        # exporter reads gen_ai.system (standard OTel semconv) to set the dependency
-        # Type column. This processor bridges the gap for all Gen AI spans.
+        # azure-monitor-opentelemetry ignores `attributes=` at span creation time;
+        # only set_attribute() calls work. AzureAIOpenTelemetryTracer sets
+        # gen_ai.provider.name via attributes= (so it's dropped), and the Azure Monitor
+        # exporter reads gen_ai.system to populate the Type column.
+        # Fix: identify GenAI spans by name at on_start and set gen_ai.system directly.
         from opentelemetry import trace as _trace
         from opentelemetry.sdk.trace import SpanProcessor
 
-        class _ProviderNameToSystemProcessor(SpanProcessor):
+        _GENAI_SPAN_NAMES = {"chat", "text_completion", "embeddings"}
+        _GENAI_SPAN_PREFIXES = ("invoke_agent ", "execute_tool ", "chat ")
+
+        class _GenAiSystemProcessor(SpanProcessor):
             def on_start(self, span, parent_context=None):
-                attrs = span.attributes or {}
-                if "gen_ai.provider.name" in attrs and "gen_ai.system" not in attrs:
-                    span.set_attribute("gen_ai.system", attrs["gen_ai.provider.name"])
+                name = getattr(span, "name", "") or ""
+                is_genai = name in _GENAI_SPAN_NAMES or any(
+                    name.startswith(p) for p in _GENAI_SPAN_PREFIXES
+                )
+                if is_genai:
+                    span.set_attribute("gen_ai.system", PROVIDER_NAME)
             def on_end(self, span):
                 pass
 
         provider = _trace.get_tracer_provider()
         if hasattr(provider, "add_span_processor"):
-            provider.add_span_processor(_ProviderNameToSystemProcessor())
+            provider.add_span_processor(_GenAiSystemProcessor())
 
         logger.info(f"Azure Monitor configured (service.name={SERVICE_NAME!r})")
         _monitor_configured = True
@@ -105,9 +113,13 @@ def agent_span(agent_name: str, agent_description: str = None, session_id: str =
         attributes["gen_ai.conversation.id"] = session_id
         attributes["gen_ai.agent.id"] = f"{agent_name.lower().replace(' ', '_')}_{session_id}"
 
+    # Note: attributes= at span creation is ignored by azure-monitor-opentelemetry;
+    # use set_attribute() inside the context instead.
     with tracer.start_as_current_span(
-        f"invoke_agent {agent_name}", kind=SpanKind.INTERNAL, attributes=attributes
+        f"invoke_agent {agent_name}", kind=SpanKind.INTERNAL
     ) as span:
+        for k, v in attributes.items():
+            span.set_attribute(k, v)
         try:
             yield span
         except Exception as e:

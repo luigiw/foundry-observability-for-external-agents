@@ -118,9 +118,8 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
         "configurable": {"thread_id": session_id},
     }
 
-    tracer = get_azure_tracer()
-    if tracer:
-        config["callbacks"] = [tracer]
+    # Ensure tracing is initialised; agents.py adds callbacks per llm.invoke call
+    get_azure_tracer()
 
     result = customer_support_graph.invoke(initial_state, config=config)
 
