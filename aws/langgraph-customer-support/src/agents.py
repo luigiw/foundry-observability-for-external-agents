@@ -2,7 +2,7 @@
 import json
 from uuid import uuid4
 from langchain_aws import ChatBedrock
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from .tracing import get_azure_tracer, agent_span
 
 # Session ID for the current request (set per invocation)
@@ -53,10 +53,12 @@ Classification guide:
 - escalation: angry customer, legal threats, requests human, complex multi-issue"""
 
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
     tracer = get_azure_tracer()
     invoke_config = {"callbacks": [tracer]} if tracer else {}
-    with agent_span(agent_name, "Routes customer queries to appropriate specialist agents", get_session_id()):
+    with agent_span(agent_name, "Routes customer queries to appropriate specialist agents", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
+        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
 
     try:
         result = json.loads(response.content)
@@ -91,10 +93,12 @@ Be helpful, empathetic, and concise. If you cannot resolve the issue, indicate t
 Always maintain a professional and friendly tone."""
     
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
     tracer = get_azure_tracer()
     invoke_config = {"callbacks": [tracer]} if tracer else {}
-    with agent_span(agent_name, "Handles billing, payments, refunds, and subscription queries", get_session_id()):
+    with agent_span(agent_name, "Handles billing, payments, refunds, and subscription queries", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
+        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -124,10 +128,12 @@ Provide clear, step-by-step solutions when possible. If the issue requires inves
 Be patient and thorough in your explanations."""
     
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
     tracer = get_azure_tracer()
     invoke_config = {"callbacks": [tracer]} if tracer else {}
-    with agent_span(agent_name, "Handles technical issues, troubleshooting, and product support", get_session_id()):
+    with agent_span(agent_name, "Handles technical issues, troubleshooting, and product support", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
+        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -155,10 +161,12 @@ def general_specialist(state: dict) -> dict:
 Be warm, helpful, and informative. Guide customers to the right department if needed."""
     
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
     tracer = get_azure_tracer()
     invoke_config = {"callbacks": [tracer]} if tracer else {}
-    with agent_span(agent_name, "Handles general inquiries, FAQs, and company information", get_session_id()):
+    with agent_span(agent_name, "Handles general inquiries, FAQs, and company information", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
+        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -183,10 +191,12 @@ def escalation_handler(state: dict) -> dict:
 Be calm, professional, and reassuring."""
     
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
     tracer = get_azure_tracer()
     invoke_config = {"callbacks": [tracer]} if tracer else {}
-    with agent_span(agent_name, "Handles escalation cases requiring human intervention", get_session_id()):
+    with agent_span(agent_name, "Handles escalation cases requiring human intervention", get_session_id(), input_text=input_text) as span:
         response = llm.invoke(messages, config=invoke_config)
+        span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": __import__("json").dumps({"role": "assistant", "content": response.content})})
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name

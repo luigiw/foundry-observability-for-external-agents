@@ -121,11 +121,19 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
     # Ensure tracing is initialised; agents.py adds callbacks per llm.invoke call
     get_azure_tracer()
 
-    result = customer_support_graph.invoke(initial_state, config=config)
+    from .tracing import invoke_agent_span
+    with invoke_agent_span(
+        "Customer Support Graph",
+        agent_description="Multi-agent customer support workflow",
+        conversation_id=session_id,
+        input_text=message,
+    ) as span_attrs:
+        graph_result = customer_support_graph.invoke(initial_state, config=config)
+        span_attrs["output_text"] = graph_result.get("final_response") or ""
 
     return {
-        "response": result["final_response"],
-        "handled_by": result["handled_by"],
-        "query_type": result["query_type"],
-        "needs_escalation": result["needs_escalation"],
+        "response": graph_result["final_response"],
+        "handled_by": graph_result["handled_by"],
+        "query_type": graph_result["query_type"],
+        "needs_escalation": graph_result["needs_escalation"],
     }

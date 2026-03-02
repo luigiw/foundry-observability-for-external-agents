@@ -114,9 +114,14 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
         },
         "configurable": {"thread_id": session_id},
     }
-    
-    result = customer_support_graph.invoke(initial_state, config=config)
-    
+
+    from .tracing import agent_span
+    import json
+    with agent_span("Customer Support Graph", "Multi-agent customer support workflow", session_id, input_text=message) as span:
+        result = customer_support_graph.invoke(initial_state, config=config)
+        if result.get("final_response"):
+            span.add_event("gen_ai.assistant.message", {"gen_ai.event.content": json.dumps({"role": "assistant", "content": result["final_response"]})})
+
     return {
         "response": result["final_response"],
         "handled_by": result["handled_by"],

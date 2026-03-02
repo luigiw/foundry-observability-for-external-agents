@@ -134,6 +134,7 @@ def invoke_agent_span(
     agent_id: str | None = None,
     agent_description: str | None = None,
     conversation_id: str | None = None,
+    input_text: str | None = None,
     request_model: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
@@ -211,6 +212,11 @@ def invoke_agent_span(
     with tracer.start_as_current_span(span_name, kind=SpanKind.INTERNAL) as span:
         for k, v in attributes.items():
             span.set_attribute(k, v)
+        if input_text:
+            span.add_event(
+                "gen_ai.user.message",
+                {"gen_ai.event.content": json.dumps({"role": "user", "content": input_text})},
+            )
         try:
             yield result
             # Set response attributes after the agent runs
@@ -222,6 +228,11 @@ def invoke_agent_span(
                 span.set_attribute("gen_ai.response.model", result["response_model"])
             if result.get("finish_reasons"):
                 span.set_attribute("gen_ai.response.finish_reasons", result["finish_reasons"])
+            if result.get("output_text"):
+                span.add_event(
+                    "gen_ai.assistant.message",
+                    {"gen_ai.event.content": json.dumps({"role": "assistant", "content": result["output_text"]})},
+                )
             span.set_status(StatusCode.OK)
         except Exception as e:
             span.set_status(StatusCode.ERROR, str(e))

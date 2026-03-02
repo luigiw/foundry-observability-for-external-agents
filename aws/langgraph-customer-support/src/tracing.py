@@ -93,11 +93,20 @@ get_otel_tracer = get_azure_tracer
 
 
 @contextmanager
-def agent_span(agent_name: str, agent_description: str = None, session_id: str = None):
+def agent_span(
+    agent_name: str,
+    agent_description: str = None,
+    session_id: str = None,
+    input_text: str = None,
+):
     """
     Context manager creating an invoke_agent span per OTel Gen AI semantic conventions.
     Wraps each agent node so it appears as a named parent span in App Insights.
+
+    Emits gen_ai.user.message event for input_text if provided.
+    Callers should emit gen_ai.assistant.message on the yielded span for output.
     """
+    import json
     from opentelemetry import trace
     from opentelemetry.trace import SpanKind, StatusCode
 
@@ -120,6 +129,11 @@ def agent_span(agent_name: str, agent_description: str = None, session_id: str =
     ) as span:
         for k, v in attributes.items():
             span.set_attribute(k, v)
+        if input_text:
+            span.add_event(
+                "gen_ai.user.message",
+                {"gen_ai.event.content": json.dumps({"role": "user", "content": input_text})},
+            )
         try:
             yield span
         except Exception as e:

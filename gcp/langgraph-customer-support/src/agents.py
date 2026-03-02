@@ -130,6 +130,7 @@ Classification guide:
 - escalation: angry customer, legal threats, requests human, complex multi-issue"""
 
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
 
     # Build invoke config with agent metadata and tracer
     metadata = _agent_metadata(
@@ -151,11 +152,12 @@ Classification guide:
         agent_name,
         agent_description="Routes customer queries to appropriate specialist agents",
         conversation_id=get_session_id(),
+        input_text=input_text,
         request_model=model_id,
         temperature=0.2,
     ) as span_result:
         response = llm.invoke(messages, config=invoke_config)
-        span_result.update(_extract_token_usage(response))
+        span_result.update({**_extract_token_usage(response), "output_text": response.content})
 
     try:
         result = json.loads(response.content)
@@ -189,6 +191,7 @@ Be helpful, empathetic, and concise. If you cannot resolve the issue, indicate t
 Always maintain a professional and friendly tone."""
 
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
 
     metadata = _agent_metadata(
         agent_name,
@@ -209,11 +212,12 @@ Always maintain a professional and friendly tone."""
         agent_name,
         agent_description="Handles billing, payments, refunds, and subscription queries",
         conversation_id=get_session_id(),
+        input_text=input_text,
         request_model=model_id,
         temperature=0.3,
     ) as span_result:
         response = llm.invoke(messages, config=invoke_config)
-        span_result.update(_extract_token_usage(response))
+        span_result.update({**_extract_token_usage(response), "output_text": response.content})
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -242,6 +246,7 @@ Provide clear, step-by-step solutions when possible. If the issue requires inves
 Be patient and thorough in your explanations."""
 
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
 
     metadata = _agent_metadata(
         agent_name,
@@ -262,11 +267,12 @@ Be patient and thorough in your explanations."""
         agent_name,
         agent_description="Handles technical issues, troubleshooting, and product support",
         conversation_id=get_session_id(),
+        input_text=input_text,
         request_model=model_id,
         temperature=0.3,
     ) as span_result:
         response = llm.invoke(messages, config=invoke_config)
-        span_result.update(_extract_token_usage(response))
+        span_result.update({**_extract_token_usage(response), "output_text": response.content})
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -293,6 +299,7 @@ def general_specialist(state: dict) -> dict:
 Be warm, helpful, and informative. Guide customers to the right department if needed."""
 
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
 
     metadata = _agent_metadata(
         agent_name,
@@ -313,11 +320,12 @@ Be warm, helpful, and informative. Guide customers to the right department if ne
         agent_name,
         agent_description="Handles general inquiries, FAQs, and company information",
         conversation_id=get_session_id(),
+        input_text=input_text,
         request_model=model_id,
         temperature=0.4,
     ) as span_result:
         response = llm.invoke(messages, config=invoke_config)
-        span_result.update(_extract_token_usage(response))
+        span_result.update({**_extract_token_usage(response), "output_text": response.content})
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
@@ -341,6 +349,7 @@ def escalation_handler(state: dict) -> dict:
 Be calm, professional, and reassuring."""
 
     messages = [SystemMessage(content=system_prompt)] + state["messages"]
+    input_text = next((m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), "")
 
     metadata = _agent_metadata(
         agent_name,
@@ -361,11 +370,12 @@ Be calm, professional, and reassuring."""
         agent_name,
         agent_description="Handles escalation cases requiring human intervention",
         conversation_id=get_session_id(),
+        input_text=input_text,
         request_model=model_id,
         temperature=0.2,
     ) as span_result:
         response = llm.invoke(messages, config=invoke_config)
-        span_result.update(_extract_token_usage(response))
+        span_result.update({**_extract_token_usage(response), "output_text": response.content})
 
     state["messages"] = state["messages"] + [AIMessage(content=response.content)]
     state["handled_by"] = agent_name
