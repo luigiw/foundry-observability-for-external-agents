@@ -1,0 +1,17 @@
+# Application Insights workspace ID (shared by both agents)
+app_insights_workspace_id: "e93e55ce-5468-4d9c-a532-8887871161ed"
+
+agents:
+  - id: aws
+    name: "AWS Customer Support Agent"
+    description: "LangGraph multi-agent system running on AWS Lambda + API Gateway, powered by Amazon Bedrock."
+    icon: "🟠"
+    url: "https://6n9k7anskk.execute-api.us-east-1.amazonaws.com/prod/support"
+    cloud_role_name: "aws-langgraph-customer-support"
+
+  - id: gcp
+    name: "GCP Customer Support Agent"
+    description: "LangGraph multi-agent system running on GCP Cloud Run, powered by Anthropic via Azure AI Foundry."
+    icon: "🔵"
+    url: "http://localhost:8080/support"
+    cloud_role_name: "gcp-langgraph-customer-support"

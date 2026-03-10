@@ -4,6 +4,7 @@ import requests
 import json
 
 API_ENDPOINT = "https://6n9k7anskk.execute-api.us-east-1.amazonaws.com/prod/support"
+API_KEY = os.environ.get("CUSTOMER_SUPPORT_API_KEY", "")
 
 # Azure Application Insights connection string (optional for local tracing)
 APPINSIGHTS_CONNECTION_STRING = os.environ.get(
@@ -29,7 +30,7 @@ def invoke_agent(message: str, customer_id: str | None = None) -> dict:
     
     response = requests.post(
         API_ENDPOINT,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "x-api-key": API_KEY},
         json=payload,
         timeout=120  # Agent may take time to respond
     )

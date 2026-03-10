@@ -1,1 +1,0 @@
-"""Callables for Azure AI."""

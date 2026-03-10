@@ -71,10 +71,43 @@ Resources:
     Properties:
       Name: langgraph-customer-support-api
       StageName: prod
+      Auth:
+        ApiKeyRequired: true
       Cors:
         AllowMethods: "'POST, OPTIONS'"
-        AllowHeaders: "'Content-Type'"
+        AllowHeaders: "'Content-Type, x-api-key'"
         AllowOrigin: "'*'"
+
+  # API Key
+  CustomerSupportApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: CustomerSupportApiprodStage
+    Properties:
+      Name: langgraph-customer-support-api-key
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref CustomerSupportApi
+          StageName: prod
+
+  # Usage Plan (required to associate API key with API)
+  CustomerSupportUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn: CustomerSupportApiprodStage
+    Properties:
+      UsagePlanName: langgraph-customer-support-usage-plan
+      ApiStages:
+        - ApiId: !Ref CustomerSupportApi
+          Stage: prod
+      Throttle:
+        RateLimit: 10
+        BurstLimit: 5
+
+  CustomerSupportUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref CustomerSupportApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref CustomerSupportUsagePlan
 
 Outputs:
   ApiEndpoint:
@@ -83,3 +116,6 @@ Outputs:
   FunctionArn:
     Description: Lambda function ARN
     Value: !GetAtt CustomerSupportFunction.Arn
+  ApiKeyId:
+    Description: API Key ID (use 'aws apigateway get-api-key --api-key <id> --include-value' to retrieve the value)
+    Value: !Ref CustomerSupportApiKey
