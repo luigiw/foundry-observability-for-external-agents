@@ -9,7 +9,12 @@ logger = logging.getLogger(__name__)
 PROVIDER_NAME = "aws.bedrock"
 SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME", "aws-langgraph-customer-support")
 
-_monitor_configured = False
+# Ensure OTEL_SERVICE_NAME is in the environment so that
+# AzureAIOpenTelemetryTracer's internal configure_azure_monitor() picks it up
+# for the service.name resource attribute (cloud_RoleName in App Insights).
+if "OTEL_SERVICE_NAME" not in os.environ:
+    os.environ["OTEL_SERVICE_NAME"] = SERVICE_NAME
+
 _azure_tracer = None
 
 
@@ -21,24 +26,15 @@ def get_connection_string() -> str:
     )
 
 
-def _configure_azure_monitor():
-    """Configure Azure Monitor OpenTelemetry exporter."""
-    global _monitor_configured
-    if _monitor_configured:
-        return
+def _add_genai_system_processor():
+    """Add a span processor that sets gen_ai.system on GenAI spans.
 
+    AzureAIOpenTelemetryTracer sets gen_ai.provider.name via attributes= at span
+    creation, but azure-monitor-opentelemetry ignores attributes= and only honours
+    set_attribute(). The Azure Monitor exporter reads gen_ai.system to populate the
+    dependency Type column. This processor bridges the gap.
+    """
     try:
-        from azure.monitor.opentelemetry import configure_azure_monitor
-        configure_azure_monitor(
-            connection_string=get_connection_string(),
-            resource_attributes={"service.name": SERVICE_NAME},
-        )
-
-        # azure-monitor-opentelemetry ignores `attributes=` at span creation time;
-        # only set_attribute() calls work. AzureAIOpenTelemetryTracer sets
-        # gen_ai.provider.name via attributes= (so it's dropped), and the Azure Monitor
-        # exporter reads gen_ai.system to populate the Type column.
-        # Fix: identify GenAI spans by name at on_start and set gen_ai.system directly.
         from opentelemetry import trace as _trace
         from opentelemetry.sdk.trace import SpanProcessor
 
@@ -59,11 +55,8 @@ def _configure_azure_monitor():
         provider = _trace.get_tracer_provider()
         if hasattr(provider, "add_span_processor"):
             provider.add_span_processor(_GenAiSystemProcessor())
-
-        logger.info(f"Azure Monitor configured (service.name={SERVICE_NAME!r})")
-        _monitor_configured = True
     except Exception as e:
-        logger.warning(f"Failed to configure Azure Monitor: {e}")
+        logger.warning(f"Failed to add GenAI system processor: {e}")
 
 
 def get_azure_tracer():
@@ -73,14 +66,15 @@ def get_azure_tracer():
     if _azure_tracer is not None:
         return _azure_tracer
 
-    _configure_azure_monitor()
-
     try:
         from langchain_azure_ai.callbacks.tracers import AzureAIOpenTelemetryTracer
         _azure_tracer = AzureAIOpenTelemetryTracer(
+            connection_string=get_connection_string(),
             name=SERVICE_NAME,
             provider_name=PROVIDER_NAME,
         )
+        # Add processor after the tracer has internally configured Azure Monitor
+        _add_genai_system_processor()
         logger.info("AzureAIOpenTelemetryTracer initialized")
     except Exception as e:
         logger.warning(f"Failed to initialize AzureAIOpenTelemetryTracer: {e}")
@@ -143,13 +137,32 @@ def agent_span(
             raise
 
 
-def flush_traces():
-    """Flush any pending traces to Azure Monitor."""
+def flush_traces(timeout_millis: int = 30000):
+    """Flush any pending traces to Azure Monitor.
+
+    We call force_flush directly on the BatchSpanProcessor rather than
+    on the TracerProvider because azure-monitor-opentelemetry's
+    _QuickpulseSpanProcessor.force_flush() returns None (falsy), which
+    causes the SynchronousMultiSpanProcessor to short-circuit before
+    reaching the BatchSpanProcessor.
+    """
     try:
         from opentelemetry import trace
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
         provider = trace.get_tracer_provider()
-        if hasattr(provider, "force_flush"):
-            provider.force_flush()
+        if not hasattr(provider, "_active_span_processor"):
+            return
+
+        flushed = False
+        for sp in getattr(
+            provider._active_span_processor, "_span_processors", []
+        ):
+            if isinstance(sp, BatchSpanProcessor):
+                sp.force_flush(timeout_millis)
+                flushed = True
+
+        if flushed:
             logger.info("Traces flushed successfully")
     except Exception as e:
         logger.warning(f"Error flushing traces: {e}")
