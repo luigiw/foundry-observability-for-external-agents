@@ -9,13 +9,11 @@ logger = logging.getLogger(__name__)
 PROVIDER_NAME = "aws.bedrock"
 SERVICE_NAME = os.environ.get("OTEL_SERVICE_NAME", "aws-langgraph-customer-support")
 
-# Ensure OTEL_SERVICE_NAME is in the environment so that
-# AzureAIOpenTelemetryTracer's internal configure_azure_monitor() picks it up
-# for the service.name resource attribute (cloud_RoleName in App Insights).
 if "OTEL_SERVICE_NAME" not in os.environ:
     os.environ["OTEL_SERVICE_NAME"] = SERVICE_NAME
 
 _azure_tracer = None
+_provider_configured = False
 
 
 def get_connection_string() -> str:
@@ -26,37 +24,58 @@ def get_connection_string() -> str:
     )
 
 
-def _add_genai_system_processor():
-    """Add a span processor that sets gen_ai.system on GenAI spans.
+def _setup_tracer_provider():
+    """Set up TracerProvider with AzureMonitorTraceExporter directly.
 
-    AzureAIOpenTelemetryTracer sets gen_ai.provider.name via attributes= at span
-    creation, but azure-monitor-opentelemetry ignores attributes= and only honours
-    set_attribute(). The Azure Monitor exporter reads gen_ai.system to populate the
-    dependency Type column. This processor bridges the gap.
+    This avoids configure_azure_monitor() which adds auto-instrumentation
+    for urllib3/requests that causes duplicate spans in App Insights.
     """
-    try:
-        from opentelemetry import trace as _trace
-        from opentelemetry.sdk.trace import SpanProcessor
+    global _provider_configured
+    if _provider_configured:
+        return
 
+    try:
+        from opentelemetry import trace
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider, SpanProcessor
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+        from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
+        from azure.monitor.opentelemetry.exporter import AzureMonitorTraceExporter
+
+        resource = Resource.create({"service.name": SERVICE_NAME})
+        sampler = ParentBased(TraceIdRatioBased(1.0))
+        provider = TracerProvider(resource=resource, sampler=sampler)
+
+        exporter = AzureMonitorTraceExporter(
+            connection_string=get_connection_string(),
+        )
+        provider.add_span_processor(BatchSpanProcessor(exporter))
+
+        # The AzureMonitorTraceExporter reads gen_ai.system (not
+        # gen_ai.provider.name) to populate the dependency Type column.
+        # AzureAIOpenTelemetryTracer only sets gen_ai.provider.name on
+        # chat spans, so bridge the gap with a lightweight processor.
         _GENAI_SPAN_NAMES = {"chat", "text_completion", "embeddings"}
         _GENAI_SPAN_PREFIXES = ("invoke_agent ", "execute_tool ", "chat ")
 
-        class _GenAiSystemProcessor(SpanProcessor):
+        class _GenAiSystemBridge(SpanProcessor):
             def on_start(self, span, parent_context=None):
                 name = getattr(span, "name", "") or ""
-                is_genai = name in _GENAI_SPAN_NAMES or any(
+                if name in _GENAI_SPAN_NAMES or any(
                     name.startswith(p) for p in _GENAI_SPAN_PREFIXES
-                )
-                if is_genai:
+                ):
                     span.set_attribute("gen_ai.system", PROVIDER_NAME)
+
             def on_end(self, span):
                 pass
 
-        provider = _trace.get_tracer_provider()
-        if hasattr(provider, "add_span_processor"):
-            provider.add_span_processor(_GenAiSystemProcessor())
+        provider.add_span_processor(_GenAiSystemBridge())
+        trace.set_tracer_provider(provider)
+
+        _provider_configured = True
+        logger.info("TracerProvider configured with AzureMonitorTraceExporter")
     except Exception as e:
-        logger.warning(f"Failed to add GenAI system processor: {e}")
+        logger.warning(f"Failed to configure TracerProvider: {e}")
 
 
 def get_azure_tracer():
@@ -66,15 +85,19 @@ def get_azure_tracer():
     if _azure_tracer is not None:
         return _azure_tracer
 
+    _setup_tracer_provider()
+
     try:
         from langchain_azure_ai.callbacks.tracers import AzureAIOpenTelemetryTracer
+        # Prevent the tracer from calling configure_azure_monitor() internally,
+        # which would replace our TracerProvider with one that auto-instruments
+        # urllib3/requests (causing duplicate spans in App Insights).
+        AzureAIOpenTelemetryTracer._azure_monitor_configured = True
         _azure_tracer = AzureAIOpenTelemetryTracer(
             connection_string=get_connection_string(),
             name=SERVICE_NAME,
             provider_name=PROVIDER_NAME,
         )
-        # Add processor after the tracer has internally configured Azure Monitor
-        _add_genai_system_processor()
         logger.info("AzureAIOpenTelemetryTracer initialized")
     except Exception as e:
         logger.warning(f"Failed to initialize AzureAIOpenTelemetryTracer: {e}")
@@ -108,7 +131,7 @@ def agent_span(
     attributes: dict[str, Any] = {
         "gen_ai.operation.name": "invoke_agent",
         "gen_ai.provider.name": PROVIDER_NAME,
-        "gen_ai.system": PROVIDER_NAME,  # read by Azure Monitor exporter for Type column
+        "gen_ai.system": PROVIDER_NAME,
         "gen_ai.agent.name": agent_name,
         "gen_ai.agent.description": agent_description or agent_name,
     }
@@ -116,8 +139,6 @@ def agent_span(
         attributes["gen_ai.conversation.id"] = session_id
         attributes["gen_ai.agent.id"] = f"{agent_name.lower().replace(' ', '_')}_{session_id}"
 
-    # Note: attributes= at span creation is ignored by azure-monitor-opentelemetry;
-    # use set_attribute() inside the context instead.
     with tracer.start_as_current_span(
         f"invoke_agent {agent_name}", kind=SpanKind.INTERNAL
     ) as span:
@@ -141,10 +162,9 @@ def flush_traces(timeout_millis: int = 30000):
     """Flush any pending traces to Azure Monitor.
 
     We call force_flush directly on the BatchSpanProcessor rather than
-    on the TracerProvider because azure-monitor-opentelemetry's
-    _QuickpulseSpanProcessor.force_flush() returns None (falsy), which
-    causes the SynchronousMultiSpanProcessor to short-circuit before
-    reaching the BatchSpanProcessor.
+    on the TracerProvider because some span processors (e.g. QuickPulse)
+    return None from force_flush(), causing SynchronousMultiSpanProcessor
+    to short-circuit before reaching the BatchSpanProcessor.
     """
     try:
         from opentelemetry import trace
