@@ -5,6 +5,8 @@ __pycache__
 .dockerignore
 README.md
 test_local.py
+test_local.sh
 client.py
 .env
 *.md
+.venv
