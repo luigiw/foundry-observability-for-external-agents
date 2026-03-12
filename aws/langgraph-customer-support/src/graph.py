@@ -40,6 +40,13 @@ def route_to_specialist(state: dict) -> str:
     return routing_map.get(state.get("query_type", "unknown"), "general")
 
 
+# Rename so LangGraph passes name='Router Agent' to on_chain_start, matching
+# langgraph_node and causing AzureAIOpenTelemetryTracer to ignore this callback.
+# Without this the edge fires its own invoke_agent Router Agent span, duplicating
+# the one created by RunnableLambda(router_agent) above.
+route_to_specialist.__name__ = "Router Agent"
+
+
 def build_graph() -> StateGraph:
     """Build and compile the customer support graph."""
     
@@ -48,9 +55,7 @@ def build_graph() -> StateGraph:
     
     # Wrap each node in RunnableLambda so the tracer sees callback_name != langgraph_node,
     # which prevents AzureAIOpenTelemetryTracer from silently ignoring the span.
-    # Router Agent uses name="Router Agent" (matches node name) so the lambda itself is
-    # ignored — its span is produced by the route_to_specialist conditional edge callback.
-    workflow.add_node("Router Agent", RunnableLambda(router_agent, name="Router Agent"))
+    workflow.add_node("Router Agent", RunnableLambda(router_agent))
     workflow.add_node("Billing Specialist", RunnableLambda(billing_specialist))
     workflow.add_node("Technical Specialist", RunnableLambda(technical_specialist))
     workflow.add_node("General Specialist", RunnableLambda(general_specialist))
