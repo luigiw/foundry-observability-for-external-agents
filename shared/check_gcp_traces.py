@@ -1,10 +1,9 @@
 """Check GCP agent traces in Azure Application Insights."""
 import os
 import requests
-from datetime import datetime, timedelta
 
-APP_ID = "e93e55ce-5468-4d9c-a532-8887871161ed"
-API_KEY = "hpkjqv70m68bv52wy7pxrfprzlh78xn9y0xmadg7"
+APP_ID = os.environ.get("APPINSIGHTS_APP_ID", "e93e55ce-5468-4d9c-a532-8887871161ed")
+API_KEY = os.environ.get("APPINSIGHTS_API_KEY", "")
 BASE_URL = f"https://api.applicationinsights.io/v1/apps/{APP_ID}"
 
 headers = {
@@ -12,11 +11,11 @@ headers = {
     "Content-Type": "application/json"
 }
 
-# Query for traces from the last 10 minutes to get the GCP agent traces
 query = """
 dependencies
 | where timestamp > ago(10m)
 | where name contains "invoke_agent" or name contains "chat" or name contains "POST"
+| summarize arg_min(timestamp, *) by id
 | project timestamp, name, type, target, duration, success, customDimensions
 | order by timestamp desc
 | take 10
@@ -32,7 +31,7 @@ if response.status_code == 200:
     result = response.json()
     rows = result.get("tables", [{}])[0].get("rows", [])
     columns = result.get("tables", [{}])[0].get("columns", [])
-    
+
     print("=== Recent Dependencies (last 10 min) ===\n")
     for row in rows:
         data = dict(zip([c["name"] for c in columns], row))
