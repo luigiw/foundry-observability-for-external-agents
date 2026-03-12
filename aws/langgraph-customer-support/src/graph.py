@@ -3,7 +3,7 @@ from typing import TypedDict, Annotated, Any
 from uuid import uuid4
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
-from langchain_core.runnables import RunnableConfig
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 from .agents import (
     router_agent,
     billing_specialist,
@@ -46,12 +46,15 @@ def build_graph() -> StateGraph:
     # Create the graph with our state schema
     workflow = StateGraph(AgentState)
     
-    # Add nodes with descriptive names
-    workflow.add_node("Router Agent", router_agent)
-    workflow.add_node("Billing Specialist", billing_specialist)
-    workflow.add_node("Technical Specialist", technical_specialist)
-    workflow.add_node("General Specialist", general_specialist)
-    workflow.add_node("Escalation Handler", escalation_handler)
+    # Wrap each node in RunnableLambda so the tracer sees callback_name != langgraph_node,
+    # which prevents AzureAIOpenTelemetryTracer from silently ignoring the span.
+    # Router Agent uses name="Router Agent" (matches node name) so the lambda itself is
+    # ignored — its span is produced by the route_to_specialist conditional edge callback.
+    workflow.add_node("Router Agent", RunnableLambda(router_agent, name="Router Agent"))
+    workflow.add_node("Billing Specialist", RunnableLambda(billing_specialist))
+    workflow.add_node("Technical Specialist", RunnableLambda(technical_specialist))
+    workflow.add_node("General Specialist", RunnableLambda(general_specialist))
+    workflow.add_node("Escalation Handler", RunnableLambda(escalation_handler))
     
     # Set entry point
     workflow.set_entry_point("Router Agent")
