@@ -1,9 +1,6 @@
 """Azure Application Insights tracing using langchain-azure-ai with Gen AI semantic conventions."""
 import os
-import json
 import logging
-from contextlib import contextmanager
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -121,125 +118,6 @@ def get_azure_tracer():
         logger.warning(f"Failed to initialize Azure AI tracer: {e}")
 
     return _azure_tracer
-
-
-def get_tracer_callbacks() -> list:
-    """Get the list of tracer callbacks to pass to LangChain/LangGraph."""
-    tracer = get_azure_tracer()
-    return [tracer] if tracer else []
-
-
-@contextmanager
-def invoke_agent_span(
-    agent_name: str,
-    *,
-    agent_id: str | None = None,
-    agent_description: str | None = None,
-    conversation_id: str | None = None,
-    input_text: str | None = None,
-    request_model: str | None = None,
-    temperature: float | None = None,
-    max_tokens: int | None = None,
-    system_instructions: str | None = None,
-):
-    """
-    Create an OTel span following Gen AI Agent semantic conventions.
-
-    Spec: https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/
-
-    The span follows the invoke_agent convention:
-    - span name: "invoke_agent {gen_ai.agent.name}"
-    - span kind: INTERNAL (in-process LangGraph agent)
-    - Required: gen_ai.operation.name, gen_ai.provider.name
-    - Conditionally Required: gen_ai.agent.*, gen_ai.conversation.id, gen_ai.request.model
-
-    Yields a dict that callers can update with response attributes
-    (e.g., token usage) before the span closes.
-    """
-    try:
-        from opentelemetry import trace
-        from opentelemetry.trace import StatusCode, SpanKind
-    except ImportError:
-        # OTel not available — yield a no-op dict
-        result: dict[str, Any] = {}
-        yield result
-        return
-
-    tracer = trace.get_tracer(SERVICE_NAME)
-
-    # Required attributes (set at span creation for sampling)
-    attributes: dict[str, Any] = {
-        "gen_ai.operation.name": "invoke_agent",
-        "gen_ai.provider.name": PROVIDER_NAME,
-        # gen_ai.system is the standard OTel semconv attribute that Azure Monitor
-        # exporter reads to set the dependency Type (e.g. "GenAI | anthropic")
-        "gen_ai.system": PROVIDER_NAME,
-    }
-
-    # Conditionally Required
-    if agent_name:
-        attributes["gen_ai.agent.name"] = agent_name
-    if agent_id:
-        attributes["gen_ai.agent.id"] = agent_id
-    if agent_description:
-        attributes["gen_ai.agent.description"] = agent_description
-    if conversation_id:
-        attributes["gen_ai.conversation.id"] = conversation_id
-    if request_model:
-        attributes["gen_ai.request.model"] = request_model
-
-    # Recommended
-    if temperature is not None:
-        attributes["gen_ai.request.temperature"] = temperature
-    if max_tokens is not None:
-        attributes["gen_ai.request.max_tokens"] = max_tokens
-
-    # Server address
-    server = _get_server_address()
-    if server:
-        attributes["server.address"] = server[0]
-        attributes["server.port"] = server[1]
-
-    # Opt-In: system instructions
-    if system_instructions:
-        attributes["gen_ai.system_instructions"] = json.dumps(
-            [{"type": "text", "content": system_instructions}]
-        )
-
-    span_name = f"invoke_agent {agent_name}" if agent_name else "invoke_agent"
-    result: dict[str, Any] = {}
-
-    # Note: attributes= at span creation is ignored by azure-monitor-opentelemetry;
-    # use set_attribute() inside the context instead.
-    with tracer.start_as_current_span(span_name, kind=SpanKind.INTERNAL) as span:
-        for k, v in attributes.items():
-            span.set_attribute(k, v)
-        if input_text:
-            span.set_attribute(
-                "gen_ai.input.messages",
-                json.dumps([{"role": "user", "parts": [{"type": "text", "content": input_text}]}]),
-            )
-        try:
-            yield result
-            # Set response attributes after the agent runs
-            if result.get("input_tokens"):
-                span.set_attribute("gen_ai.usage.input_tokens", result["input_tokens"])
-            if result.get("output_tokens"):
-                span.set_attribute("gen_ai.usage.output_tokens", result["output_tokens"])
-            if result.get("response_model"):
-                span.set_attribute("gen_ai.response.model", result["response_model"])
-            if result.get("finish_reasons"):
-                span.set_attribute("gen_ai.response.finish_reasons", result["finish_reasons"])
-            if result.get("output_text"):
-                span.set_attribute(
-                    "gen_ai.output.messages",
-                    json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": result["output_text"]}], "finish_reason": "stop"}]),
-                )
-            span.set_status(StatusCode.OK)
-        except Exception as e:
-            span.set_status(StatusCode.ERROR, str(e))
-            span.set_attribute("error.type", type(e).__name__)
-            raise
 
 
 def flush_traces(timeout_millis: int = 30000):

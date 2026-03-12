@@ -85,12 +85,11 @@ customer_support_graph = build_graph()
 def invoke_support(message: str, customer_id: str | None = None) -> dict:
     """Invoke the customer support graph with Azure AI tracing."""
     from langchain_core.messages import HumanMessage
-    from .tracing import get_azure_tracer as get_tracer
-    
-    # Generate a unique session ID for this conversation
+    from .tracing import get_azure_tracer, flush_traces
+
     session_id = str(uuid4())
     set_session_id(session_id)
-    
+
     initial_state = {
         "messages": [HumanMessage(content=message)],
         "customer_id": customer_id,
@@ -100,27 +99,24 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
         "handled_by": None,
         "final_response": None,
     }
-    
-    # Ensure tracing is initialised (agents.py adds callbacks per llm.invoke call)
-    get_tracer()
+
+    tracer = get_azure_tracer()
+    callbacks = [tracer] if tracer else []
 
     config: RunnableConfig = {
+        "callbacks": callbacks,
         "run_name": "Customer Support Workflow",
         "tags": ["customer-support", "multi-agent", "langgraph"],
         "metadata": {
             "workflow_type": "customer_support",
             "customer_id": customer_id,
             "session_id": session_id,
+            "thread_id": session_id,
         },
         "configurable": {"thread_id": session_id},
     }
 
-    from .tracing import agent_span
-    import json
-    with agent_span("Customer Support Graph", "Multi-agent customer support workflow", session_id, input_text=message) as span:
-        result = customer_support_graph.invoke(initial_state, config=config)
-        if result.get("final_response"):
-            span.set_attribute("gen_ai.output.messages", json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": result["final_response"]}], "finish_reason": "stop"}]))
+    result = customer_support_graph.invoke(initial_state, config=config)
 
     return {
         "response": result["final_response"],
