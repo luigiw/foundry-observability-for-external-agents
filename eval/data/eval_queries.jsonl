@@ -1,0 +1,16 @@
+{"query": "I was charged twice for my subscription last month. Can you help me get a refund?", "expected_query_type": "billing"}
+{"query": "My invoice shows $99 but I signed up for the $79 plan. There's a discrepancy.", "expected_query_type": "billing"}
+{"query": "How do I cancel my subscription and get a prorated refund?", "expected_query_type": "billing"}
+{"query": "I need a receipt for my last three payments for expense reporting.", "expected_query_type": "billing"}
+{"query": "The app keeps crashing when I try to upload files larger than 10MB. Error code: ERR_FILE_TOO_LARGE", "expected_query_type": "technical"}
+{"query": "I'm getting a 500 error on the login page. It started after your latest update.", "expected_query_type": "technical"}
+{"query": "How do I configure two-factor authentication on my account?", "expected_query_type": "technical"}
+{"query": "The CSV export feature downloads an empty file every time. I've tried three browsers.", "expected_query_type": "technical"}
+{"query": "What are your customer support business hours?", "expected_query_type": "general"}
+{"query": "Do you have a mobile app for iOS and Android?", "expected_query_type": "general"}
+{"query": "Where can I find your privacy policy and terms of service?", "expected_query_type": "general"}
+{"query": "Hi! I just signed up. How do I get started with the product?", "expected_query_type": "general"}
+{"query": "This is outrageous! I've been waiting 3 weeks for a resolution and nobody has helped me. I want to speak to a manager immediately!", "expected_query_type": "escalation"}
+{"query": "Your service has caused me significant financial damage. I'm consulting my lawyer if this isn't resolved today.", "expected_query_type": "escalation"}
+{"query": "I have billing issues, a broken feature, and my emails have been ignored for two weeks. This is completely unacceptable.", "expected_query_type": "escalation"}
+{"query": "I demand a full refund immediately or I will dispute every charge with my credit card company and post reviews everywhere.", "expected_query_type": "escalation"}

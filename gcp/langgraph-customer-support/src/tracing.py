@@ -4,6 +4,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Workaround: psutil fails to parse /proc/1/io in some containers (Cloud Run)
+# where the kernel uses 'char'/'wchar' field names instead of 'rchar'/'wchar'.
+# Patch io_counters to return a zeroed named tuple instead of crashing, which
+# lets AzureAIOpenTelemetryTracer and Resource detection proceed normally.
+# ---------------------------------------------------------------------------
+try:
+    import psutil._pslinux as _pslinux
+    from collections import namedtuple
+
+    _orig_io_counters = _pslinux.Process.io_counters
+    _pio_stub = namedtuple("pio", ["read_count", "write_count", "read_bytes",
+                                   "write_bytes", "read_chars", "write_chars"])
+
+    def _safe_io_counters(self):
+        try:
+            return _orig_io_counters(self)
+        except (ValueError, KeyError):
+            return _pio_stub(0, 0, 0, 0, 0, 0)
+
+    _pslinux.Process.io_counters = _safe_io_counters
+except Exception:
+    pass
+
+logger = logging.getLogger(__name__)
+
 _azure_tracer = None
 _provider_configured = False
 

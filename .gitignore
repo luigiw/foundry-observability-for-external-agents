@@ -30,3 +30,6 @@ Thumbs.db
 
 # Byte-compiled
 *.so
+
+# Evaluation results
+eval/results/
