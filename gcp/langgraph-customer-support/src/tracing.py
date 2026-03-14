@@ -120,6 +120,39 @@ def get_azure_tracer():
     return _azure_tracer
 
 
+def setup_tracer_provider():
+    """Ensure the TracerProvider is initialized. Safe to call multiple times."""
+    _setup_tracer_provider()
+
+
+def extract_context_from_headers(headers):
+    """Extract W3C Trace Context and Baggage from HTTP headers.
+
+    Normalizes header keys to lowercase for case-insensitive matching.
+
+    Args:
+        headers: A dict or Headers-like mapping (e.g. Starlette Headers).
+    """
+    from opentelemetry.propagate import extract
+    from opentelemetry.context import get_current
+
+    if not headers:
+        return get_current()
+
+    normalized = {k.lower(): v for k, v in headers.items()}
+    return extract(normalized)
+
+
+def inject_context_into_headers(headers: dict):
+    """Inject current OTel trace context and baggage into HTTP headers.
+
+    Adds traceparent, tracestate, and baggage headers from the
+    currently active span context.
+    """
+    from opentelemetry.propagate import inject
+    inject(headers)
+
+
 def flush_traces(timeout_millis: int = 30000):
     """Flush any pending traces to Azure Monitor.
 
