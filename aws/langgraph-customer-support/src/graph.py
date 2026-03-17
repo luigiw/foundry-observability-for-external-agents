@@ -1,6 +1,7 @@
 """LangGraph workflow for customer support multi-agent system."""
 from typing import TypedDict, Annotated, Any
 from uuid import uuid4
+from opentelemetry import trace
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.runnables import RunnableConfig, RunnableLambda
@@ -124,7 +125,16 @@ def invoke_support(message: str, customer_id: str | None = None) -> dict:
         "configurable": {"thread_id": session_id},
     }
 
-    result = customer_support_graph.invoke(initial_state, config=config)
+    otel_tracer = trace.get_tracer(__name__)
+    with otel_tracer.start_as_current_span("customer_support_evaluation") as span:
+        result = customer_support_graph.invoke(initial_state, config=config)
+
+        span.set_attribute("customer_support.query", message)
+        span.set_attribute("customer_support.query_type", result["query_type"])
+        span.set_attribute("customer_support.handled_by", result["handled_by"] or "")
+        span.set_attribute("customer_support.needs_escalation", result["needs_escalation"])
+        span.set_attribute("customer_support.response", result["final_response"] or "")
+        span.set_attribute("customer_support.session_id", session_id)
 
     return {
         "response": result["final_response"],
