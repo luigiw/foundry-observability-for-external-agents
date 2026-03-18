@@ -2,8 +2,12 @@
 import pathlib
 import yaml
 import streamlit as st
+from dotenv import load_dotenv
 
-from pages import agent_list, chat, traces
+from pages import agent_list, chat, traces, compare
+
+# Load .env for AZURE_OPENAI_* vars used by the evaluator
+load_dotenv(pathlib.Path(__file__).parent / ".env")
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Agent Playground", page_icon="🤖", layout="wide")
@@ -41,6 +45,10 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
+    if st.button("🔍 Compare Agents", use_container_width=True):
+        st.session_state.page = "compare"
+        st.rerun()
+
     selected = st.session_state.selected_agent
     if selected:
         st.markdown(f"**Active:** {selected['icon']} {selected['name']}")
@@ -59,7 +67,9 @@ with st.sidebar:
 # ── Page routing ─────────────────────────────────────────────────────────────
 page = st.session_state.page
 
-if page == "agents" or st.session_state.selected_agent is None:
+if page == "compare":
+    compare.render(workspace_id)
+elif page == "agents" or st.session_state.selected_agent is None:
     agent_list.render(agents)
 elif page == "chat":
     chat.render(st.session_state.selected_agent)
