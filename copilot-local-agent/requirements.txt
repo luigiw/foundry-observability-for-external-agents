@@ -1,0 +1,19 @@
+# GitHub Copilot SDK (imports as `copilot`)
+# Install from PyPI: pip install github-copilot-sdk
+# Or from source with telemetry extras: pip install -e ".[telemetry,dev]"
+#   (clone https://github.com/github/copilot-sdk and run from python/ dir)
+github-copilot-sdk
+
+# Azure Application Insights tracing (used when NOT running the OTel Collector)
+azure-monitor-opentelemetry-exporter>=1.0.0b33
+
+# OpenTelemetry
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-exporter-otlp-proto-http>=1.20.0
+
+# Pydantic for tool parameter models
+pydantic>=2.0.0
+
+# Environment config
+python-dotenv>=1.0.0

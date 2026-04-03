@@ -1,0 +1,41 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+  transform/tag_agent_spans:
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["gen_ai.agent.name"], "hw-copilot-cli") where IsRootSpan() and attributes["gen_ai.operation.name"] == "invoke_agent"
+          - set(attributes["gen_ai.agent.id"], "hw-copilot-cli") where IsRootSpan() and attributes["gen_ai.operation.name"] == "invoke_agent"
+
+exporters:
+  azuremonitor:
+    connection_string: ${env:APPLICATIONINSIGHTS_CONNECTION_STRING}
+  # Uncomment to also log spans to stdout for local debugging:
+  # debug:
+  #   verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [transform/tag_agent_spans, batch]
+      exporters: [azuremonitor]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [azuremonitor]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [azuremonitor]

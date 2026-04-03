@@ -1,0 +1,10 @@
+{"user_input": "List all Python files in the current directory", "expected_tools": ["list_files"]}
+{"user_input": "What's in the requirements.txt file?", "expected_tools": ["read_file"]}
+{"user_input": "Run 'echo hello world' and tell me the output", "expected_tools": ["run_command"]}
+{"user_input": "Show me the files in the src/ directory", "expected_tools": ["list_files"]}
+{"user_input": "What does the README say about how to run the project?", "expected_tools": ["read_file"]}
+{"user_input": "List all YAML files in the project", "expected_tools": ["list_files"]}
+{"user_input": "Check if there's a .env file and what variables it contains", "expected_tools": ["list_files", "read_file"]}
+{"user_input": "Run git status and tell me what has changed", "expected_tools": ["run_command"]}
+{"user_input": "What is 2 + 2?", "expected_tools": []}
+{"user_input": "How do I install the dependencies for this project?", "expected_tools": ["read_file"]}

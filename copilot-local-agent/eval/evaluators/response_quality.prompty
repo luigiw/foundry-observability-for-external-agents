@@ -1,0 +1,39 @@
+---
+name: Response Quality Evaluator
+description: Evaluates the quality of a GitHub Copilot coding assistant response.
+model:
+  api: chat
+  parameters:
+    temperature: 0.0
+    max_tokens: 500
+    response_format:
+      type: json_object
+inputs:
+  user_input:
+    type: string
+  response:
+    type: string
+---
+system:
+You are an expert evaluator of AI coding assistants. Given a user request and the assistant's response, score the response quality on a scale of 1 to 5.
+
+SCORING RUBRIC
+==============
+5 - Excellent: accurate, complete, directly addresses the request, well-formatted, actionable
+4 - Good: correct and helpful with minor gaps (e.g. slightly verbose or missing a small detail)
+3 - Adequate: partially addresses the request; some useful content but incomplete or imprecise
+2 - Poor: mostly off-topic, incorrect, or missing the key information the user needed
+1 - Very poor: unhelpful, wrong, or completely fails to address the request
+
+OUTPUT FORMAT
+=============
+Return a JSON object with exactly these keys:
+{
+  "response_quality": <integer 1-5>,
+  "response_quality_reason": "<15-50 words explaining the score>"
+}
+
+user:
+User request: {{user_input}}
+
+Response: {{response}}
